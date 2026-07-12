@@ -40,6 +40,7 @@ Baselines are established first: if LightGBM cannot beat same-week-last-year, th
 ```
 ├── README.md
 ├── requirements.txt
+├── run_pipeline.py         # End-to-end runner: features → baselines + LightGBM → comparison
 ├── notebooks/
 │   └── 01_eda.ipynb        # Exploratory data analysis
 ├── src/
@@ -53,13 +54,18 @@ Baselines are established first: if LightGBM cannot beat same-week-last-year, th
 ```bash
 pip install -r requirements.txt
 
-# Download the Walmart dataset from Kaggle and place train.csv,
-# stores.csv, and features.csv in data/
+# Download the Walmart dataset from Kaggle and place train.csv in data/
+# https://www.kaggle.com/c/walmart-recruiting-store-sales-forecasting
 
-jupyter notebook notebooks/01_eda.ipynb
+# Run the full pipeline: engineers features, holds out the most recent
+# weeks, and compares the two baselines against LightGBM on RMSE/MAE/MAPE
+python run_pipeline.py --data data/train.csv --val-weeks 12
 ```
 
-`src/features.py` and `src/models.py` provide the feature-engineering and modeling functions used to build a forecasting workflow on top of the EDA.
+`run_pipeline.py` ties `src/features.py` and `src/models.py` into a single
+time-aware train/validation run and prints a model comparison table. The
+`notebooks/01_eda.ipynb` notebook covers the exploratory analysis that motivates
+the engineered features.
 
 ## Key Design Decisions
 
