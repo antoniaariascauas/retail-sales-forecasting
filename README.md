@@ -1,34 +1,39 @@
 # Retail Sales Forecasting
 
-Multi-model forecasting pipeline for weekly store-department sales. Compares baseline methods, Prophet, and LightGBM with engineered time series features, evaluated with business-relevant metrics.
+Forecasting pipeline for weekly store-department sales. Establishes baseline methods, then compares them against a LightGBM model trained on engineered time-series features, evaluated with business-relevant metrics.
 
 ## Problem
 
-A retailer needs to forecast weekly sales by store and department to optimize inventory, staffing, and markdown decisions. Accurate forecasts reduce overstock waste and stockout losses — even a 1% MAPE improvement across thousands of SKUs translates to significant savings.
+A retailer needs to forecast weekly sales by store and department to optimize inventory, staffing, and markdown decisions. Accurate forecasts reduce overstock waste and stockout losses across thousands of SKUs.
 
-**Dataset:** [Walmart Store Sales Forecasting](https://www.kaggle.com/c/walmart-recruiting-store-sales-forecasting) — 45 stores, 99 departments, ~420K weekly observations over 2.5 years.
+**Dataset:** [Walmart Store Sales Forecasting](https://www.kaggle.com/c/walmart-recruiting-store-sales-forecasting) — 45 stores, 99 departments, ~420K weekly observations over ~2.5 years.
 
 ## Approach
 
 ### Feature Engineering (`src/features.py`)
-- **Calendar features**: Day of week, month, week of year, holiday flags, with cyclical encoding
+- **Calendar features**: year, month, quarter, day of week, week of year, weekend / month-start / month-end flags, plus cyclical (sin/cos) encoding of month and day of week
 - **Lag features**: 1, 2, 4, 8, 12, 26, 52-week lags per store-department
-- **Rolling statistics**: Mean, std, min, max over 4/8/12/26-week windows
-- **Growth rates**: Week-over-week and year-over-year growth
+- **Rolling statistics**: mean, std, min, max over 4/8/12/26-week windows (shifted to avoid leakage)
+- **Growth rates**: week-over-week and year-over-year growth
 
-### Models Compared
+### Models (`src/models.py`)
 
 | Model | Description |
 |-------|-------------|
-| Naive baseline | Last observed value (random walk) |
+| Naive baseline | Last observed value per store-department (random walk) |
 | Seasonal baseline | Same-week-last-year average |
-| Prophet | Facebook's decomposition model with holidays |
-| LightGBM | Gradient boosting with engineered features |
+| LightGBM | Gradient boosting on engineered features, with early stopping |
 
-### Evaluation
-- **RMSE** — Penalizes large errors (important for high-volume stores)
-- **MAE** — Average absolute error in dollars
-- **MAPE** — Percentage error for cross-store comparison
+Baselines are established first: if LightGBM cannot beat same-week-last-year, the added complexity is not justified. (Prophet is included in `requirements.txt` as an option for extending the comparison.)
+
+### Evaluation (`evaluate_forecast`)
+- **RMSE** — penalizes large errors (important for high-volume stores)
+- **MAE** — average absolute error in dollars
+- **MAPE** — percentage error for cross-store comparison (guarded against zero sales)
+
+## Exploratory Analysis
+
+`notebooks/01_eda.ipynb` explores overall sales trend, monthly and holiday seasonality (holiday weeks show a measurable sales uplift), and store-level heterogeneity — motivating the calendar, lag, and rolling features above.
 
 ## Project Structure
 
@@ -36,11 +41,11 @@ A retailer needs to forecast weekly sales by store and department to optimize in
 ├── README.md
 ├── requirements.txt
 ├── notebooks/
-│   └── 01_eda.ipynb              # Exploratory data analysis
+│   └── 01_eda.ipynb        # Exploratory data analysis
 ├── src/
-│   ├── features.py               # Time series feature engineering
-│   └── models.py                 # Baseline, Prophet, LightGBM implementations
-└── data/                         # Download from Kaggle
+│   ├── features.py         # Time-series feature engineering
+│   └── models.py           # Baseline + LightGBM models and metrics
+└── data/                   # Download from Kaggle (not tracked)
 ```
 
 ## How to Run
@@ -48,19 +53,20 @@ A retailer needs to forecast weekly sales by store and department to optimize in
 ```bash
 pip install -r requirements.txt
 
-# Download data from Kaggle and place in data/
-# Run EDA
+# Download the Walmart dataset from Kaggle and place train.csv,
+# stores.csv, and features.csv in data/
+
 jupyter notebook notebooks/01_eda.ipynb
 ```
 
+`src/features.py` and `src/models.py` provide the feature-engineering and modeling functions used to build a forecasting workflow on top of the EDA.
+
 ## Key Design Decisions
 
-1. **Baselines first** — Before using complex models, establish what "good" means with naive and seasonal baselines. If LightGBM can't beat same-week-last-year, the extra complexity isn't justified.
-
-2. **Store-department granularity** — Rather than one global model, features are computed at the store-department level. Sales patterns for electronics differ fundamentally from groceries.
-
-3. **Lag-based features over decomposition** — For LightGBM, explicit lags and rolling windows outperform STL decomposition features because the model can learn non-linear seasonal interactions (e.g., holiday + department type).
+1. **Baselines first** — quantify what "good" means with naive and seasonal baselines before adding model complexity.
+2. **Store-department granularity** — features are computed per store-department, since sales patterns differ fundamentally across departments.
+3. **Lag-based features** — explicit lags and rolling windows let a gradient-boosting model learn non-linear seasonal interactions (e.g. holiday × department type).
 
 ## Tech Stack
 
-Python, LightGBM, Prophet, scikit-learn, pandas, matplotlib, seaborn
+Python, LightGBM, scikit-learn, pandas, NumPy, matplotlib, seaborn
